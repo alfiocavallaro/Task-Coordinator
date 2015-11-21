@@ -1,0 +1,22 @@
+{
+  "trigger": {
+    "subject": "Fan",
+    "room": "LivingRoom",
+    "sign": "==",
+    "object": "ON"
+  },
+  "action": {
+    "command": "SET",
+    "value": "OFF",
+    "target": "Heater",
+    "room": "LivingRoom"
+  },
+  "elseAction": {
+    "command": "SET",
+    "value": "ON",
+    "target": "AirConditionator",
+    "room": "LivingRoom"
+  },
+  "repeat": "NO"
+}
+

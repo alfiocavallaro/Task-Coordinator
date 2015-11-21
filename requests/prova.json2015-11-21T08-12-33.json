@@ -1,0 +1,15 @@
+{
+  "trigger": {
+    "subject": "time",
+    "sign": "==",
+    "object": "24.00"
+  },
+  "action": {
+    "command": "SET",
+    "value": "OFF",
+    "target": "foi:Entertainment",
+    "room": "BedRoom"
+  },
+  "repeat": "NO"
+}
+

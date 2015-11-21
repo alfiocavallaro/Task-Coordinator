@@ -1,0 +1,20 @@
+{
+  "action": {
+    "command": "SET",
+    "value": "ON",
+    "target": "SmartTV",
+    "room": "LivingRoom"
+  },
+  "trigger": {
+    "subject": "time",
+    "sign": "==",
+    "object": "[18:00-20:00]"
+  },
+  "elseAction": {
+    "command": "SET",
+    "value": "OFF",
+    "target": "SmartTV",
+    "room": "LivingRoom"
+  },
+  "repeat": "YES"
+}

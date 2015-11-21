@@ -1,0 +1,9 @@
+{
+  "action": {
+    "command": "SET",
+    "value": "HOT",
+    "target": "foi:temperature",
+    "room": "LivingRoom"
+  }
+}
+
