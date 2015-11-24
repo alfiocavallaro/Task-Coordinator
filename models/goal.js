@@ -5,9 +5,8 @@ var mongoose = require('mongoose');
 var GoalSchema = new mongoose.Schema({
   trigger: String,
   action: String,
-  value: String,
-  target: String,
-  room: String
+  elseAction: String,
+  repeat: String
 });
 
 // Export the Mongoose model

@@ -1,3 +1,4 @@
+var mongoose = require('mongoose');
 var Goal = require('../models/goal');
 var http = require('http');
 var QueryGenerator = require('./queryGenerator');
@@ -27,28 +28,35 @@ function discoveryBlockQuery(query, callback){
 	req.end();
 }
 
-
-//Punto di Partenza! Ricevo un goal da gestire.
-//Chiamo la funzione elaborateGoal alla quale passo
-//lo stream della risposta e il body ricevuto dalla richiesta
-exports.postGoals = function(req, res){
+var receive = function(req, callback){
 	var body = '';
 	req.on('data', function(data){
 		body += data;
 	});
 	req.on('end', function(){
-		elaborateGoal(res, body);
-		
-		var time = new Date().toISOString().replace(/\..+/, '').replace(/:/, '-').replace(/:/, '-');     
-		var file = './requests/prova.json' + time + '.json';
-		
-		fs.writeFile(file, body, function (err) {
-			console.log('File: ' + file +' scritto con successo');
-		});
-		
-		
+		callback(body);
 	});
 };
+
+var writeRequestFile = function(stream){
+	var time = new Date().toISOString().replace(/\..+/, '').replace(/:/, '-').replace(/:/, '-');     
+	var file = './requests/prova.json' + time + '.json';
+	
+	fs.writeFile(file, stream, function (err) {
+		console.log('File: ' + file +' scritto con successo');
+	});
+}
+
+
+//Punto di Partenza! Ricevo un goal da gestire.
+//Salvo il file di richiesta JSON si disco ed elaboro il goal
+exports.postGoals = function(req, res){
+	receive(req, function(body){
+		writeRequestFile(body);
+		elaborateGoal(res, body);
+	});
+};
+
 
 //Funzione che ottiene target e room, e da questo genera
 //la query che verrà inviata al discoveryBlock. Alla ricezione della risposta
@@ -57,26 +65,110 @@ exports.postGoals = function(req, res){
 var elaborateGoal = function(res, body){
 
 	var request = JSON.parse( body );
-	var trigger = request.trigger;
 	var action = request.action;
+	var trigger = request.trigger;
+	var elseAction = request.elseAction;
 	
-	var query = QueryGenerator.generateQuery(action);
+	var wait = 1;
+	if(trigger){
+		if(trigger.subject.toLowerCase() !== "time") wait++;
+	}
+	if(elseAction) wait++;
 	
-	discoveryBlockQuery(query, function(response){
-		
-		var smartObjects = analyzeDiscoveryBlockResponse(response);
-		
-		if(smartObjects.length == 0){
-			res.send("La ricerca non ha restituito risultati");
-			return;
-		}
-		
-		//console.log(smartObjects.length);
-		requestToSmartObjects(action, smartObjects, res);
-		
+	var receivedResp = 0;
+	
+	var queryAction = QueryGenerator.generateQuery(action);
+	discoveryBlockQuery(queryAction, function(response){
+		action.objects = analyzeDiscoveryBlockResponse(response);
+		receivedResp++;
+		if(receivedResp == wait) 
+			validateGoal(res,action,trigger,elseAction,request.repeat);
 	});
+	
+	if(trigger){
+		if(trigger.subject.toLowerCase() !== "time"){
+			var queryTrigger = QueryGenerator.generateQuery(trigger);
+			discoveryBlockQuery(queryTrigger, function(response){
+				trigger.objects = analyzeDiscoveryBlockResponse(response);
+				receivedResp++;
+				if(receivedResp == wait) 
+					validateGoal(res,action,trigger,elseAction,request.repeat);
+			});
+		}
+	}
+	
+	if(elseAction){
+		var queryElse = QueryGenerator.generateQuery(elseAction);
+		discoveryBlockQuery(queryElse, function(response){
+			elseAction.objects = analyzeDiscoveryBlockResponse(response);
+			receivedResp++;
+			if(receivedResp == wait) 
+				validateGoal(res,action,trigger,elseAction,request.repeat);
+		});
+	}
 };
 
+var validateGoal = function(res,action,trigger,elseAction,repeat){
+	
+	if(action){
+		if(action.objects.length == 0){
+			res.send("Action Objects is empty");
+			return;
+		} 
+	}else{
+		res.send("Action cannot be empty");
+		return;
+	}
+	
+	if(elseAction){
+		if(elseAction.objects.length == 0){
+			res.send("elseAction Objects is empty");
+			return;
+		} 
+	}
+	
+	if(trigger){
+		if(trigger.subject.toLowerCase() !== "time" && trigger.objects.length == 0){
+			res.send("trigger Objects is empty");
+			return;
+		}else parseTime(trigger, res);
+	}
+	
+	Coordinator.newGoal(res,action,trigger,elseAction,repeat);
+}
+
+var parseTime = function(trigger, res){
+	var elem = trigger.object.replace("[", '').replace("]", '').split("-");
+		
+	var time = elem[0].split(":");
+	var start = new Object();
+	start.hour = parseInt(time[0]);
+	start.min = parseInt(time[1]);
+	
+	if(elem.length == 2){
+		time = elem[1].split(":");
+		var end = new Object();
+		end.hour = parseInt(time[0]);
+		end.min = parseInt(time[1]);
+		
+		if(start.hour > end.hour){
+			//res.send("Time Trigger Not Valid");
+			return;
+		}else if(start.hour == end.hour){
+			if(start.min >= end.min){
+				//res.send("Time Trigger Not Valid");
+				return;
+			}
+		}
+		
+	}else if(elem.length > 2){
+		//res.send("Time Trigger Not Valid");
+		return;
+	}
+	
+	trigger.startTime = start;
+	trigger.endTime = end;
+}
 
 var analyzeDiscoveryBlockResponse = function(queryResult){
 	
@@ -118,160 +210,14 @@ var analyzeDiscoveryBlockResponse = function(queryResult){
 				smartObject.effectOnFOI.push(tripla.object.replace(/"/, '').replace(/"/, ''));
 			}
 		}
-		
-		/*console.log(smartObject.url);
-		console.log(smartObject.guid);
-		console.log(smartObject.Methods);
-		console.log(smartObject.effectOnFOI);*/
-		
 		smartObjects.push(smartObject);
 	}
-	
 	return smartObjects;
 };
-
-
-
-var requestToSmartObjects = function(request, smartObjects, res){
-	var target = request.target;
-	var splitted = target.split(":");
-	
-	if(splitted.length == 1 || request.command.toLowerCase() == "get"){ //Object
-		setRequestToTarget(request, smartObjects, res);
-	}else if(splitted.length == 2){ //Feature
-		Coordinator.sequenceOfTask(request, smartObjects, res);
-	}
-}
-
-var setRequestToTarget = function(request, smartObjects, res){
-	var risposte = [];
-	var receivedResp = 0;
-	
-	for(var i in smartObjects){
-		
-		var smartObject = smartObjects[i];
-		
-		/*console.log(smartObject.url);
-		console.log(smartObject.guid);
-		console.log(smartObject.Methods);
-		console.log(smartObject.effectOnFOI);*/
-		
-	
-		var options = elaborateRequest(smartObject, request);
-		if(options == null){
-			res.send("Richiesta non valida. Impossibile invocare il metodo sull'oggetto specificato");
-			return;
-		}
-
-		//Faccio una richiesta all'oggetto target.
-		var reqTarget = http.request(options, function(respTarget){
-			var risposta = '';
-			
-			respTarget.on('data', function (chunk) { risposta += chunk; });
-			
-			//Modificare da semplice GET ad altri metodi....
-			respTarget.on('end', function () {
-				
-				try {
-					var resp = JSON.parse(risposta);
-					var respToClient = new ResponseToClient();
-					respToClient.switch = resp.switch;
-					respToClient.measuredVal = resp.measuredVal;
-					respToClient.settedVal = resp.settedVal;
-					respToClient.guid = smartObjects[receivedResp].guid;
-					risposte.push(respToClient);
-				} catch (e) {
-					risposte.push(risposta);
-				}
-
-				receivedResp++;					
-				if(receivedResp == smartObjects.length){
-					res.statusCode = 200;
-					res.send(JSON.stringify(risposte));
-				}
-			});
-		}).end();
-	}
-};
-
-
-
-var elaborateRequest = function(smartObject, request){
-	
-	//GET - PUT - DELETE - POST ?value=valore
-	
-	/*console.log(request);
-	console.log(smartObject.url);
-	console.log(smartObject.guid);
-	console.log(smartObject.Methods);
-	console.log(smartObject.effectOnFOI);*/
-	
-
-	var value = request.value; //ON - OFF - 5 - 15°C - Cold - Hot
-	
-	if(!value && request.command.toLowerCase() == "get"){
-		var method = "GET";
-	}else if(value.toLowerCase() == "on"){
-		var method = "PUT";
-	}else if(value.toLowerCase() == "off"){
-		var method = "DELETE";
-	}else{
-		var method = "POST";
-	}
-
-	if(!hasMethod(smartObject, method)){
-		return null;
-	} 
-	
-	var url = smartObject.url;   //http://localhost:3003/MySmartTV2
-	
-	var splitted = url.split(":"); //   http - //localhost - 3003/MySmartTV2
-	
-	var hostname = splitted[1].replace('//', '');
-	
-	splitted = splitted[2].split("/");
-	
-	var port = splitted[0];
-	var path = "/" + splitted[1];
-	if(method == "POST") path += '?value=' + value;
-	
-	var options = {
-		hostname: hostname,
-		method: method,
-		port: port,
-		path: path
-	};
-
-	return options;
-};
-
-function hasMethod(smartObject, method){
-	
-	var mth;
-	if(method == "GET"){
-		mth = "GET";
-	}else if(method == "PUT" || method == "DELETE"){
-		mth = "SWITCH";
-	}else if(method == "POST"){
-		mth = "SET";
-	}else{return false;}
-	
-	
-	for (var i in smartObject.Methods){
-		var objMethod = smartObject.Methods[i];
-		/*console.log("objMethod " + objMethod);
-		console.log("method " + mth);
-		console.log("--");*/
-		if(mth == objMethod) return true;
-	}
-	return false;
-}
 
 exports.analyzeDiscoveryBlockResp = function(queryResult){
 	return analyzeDiscoveryBlockResponse(queryResult);
 }
-
-
 
 function contains(a, obj) {
     for (var i = 0; i < a.length; i++) {
@@ -282,7 +228,6 @@ function contains(a, obj) {
     return false;
 }
 	
-	
 function SmartObject() {
 	this.url = "";
 	this.guid = "";
@@ -290,66 +235,35 @@ function SmartObject() {
 	this.effectOnFOI = [];
 }
 
-
-function ResponseToClient() {
-	this.switch = "";
-	this.measuredVal = "";
-	this.settedVal = "";
-	this.guid = "";
-}
-
-
-
-/*
-HTTP METHOD
-*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Create endpoint /api/beers for GET
 exports.getGoals = function(req, res) {
-  // Use the Beer model to find all beer
-  /*Beer.find({userId: req.user._id}, function(err, beers) {
-    if (err)
-      res.send(err);
-
-    res.json(beers);
-  });*/
+	Goal.find(function(err, goals){
+		if(err){return next(err);}
+		res.json(goals)
+	})
 };
 
 exports.deleteGoals = function(req, res){
-	
+	var gl = new Goal();
+    gl.collection.drop(function (err) { 
+		res.send("Collection Dropped!");
+	});
 };
 
-// Create endpoint /api/beers/:beer_id for GET
 exports.getGoal = function(req, res) {
-  // Use the Beer model to find a specific beer
-  /*Beer.findById({ userId: req.user._id, _id: req.params.beer_id }, function(err, beer) {
+    Goal.findById({ _id: req.params.goal_id }, function(err, goal) {
     if (err)
       res.send(err);
 
-    res.json(beer);
-  });*/
+    res.json(goal);
+  });
 };
 
-// Create endpoint /api/beers/:beer_id for DELETE
 exports.deleteGoal = function(req, res) {
-  // Use the Beer model to find a specific beer and remove it
-  /*Beer.findByIdAndRemove({ userId: req.user._id, _id: req.params.beer_id }, function(err) {
-    if (err)
-      res.send(err);
+	Goal.findById({ _id: req.params.goal_id }, function(err, goal) {
+		if (err)
+			res.send(err);
 
-    res.json({ message: 'Beer removed from the locker!' });
-  });*/
+		goal.remove();
+		res.send("Dropped");
+    });
 };

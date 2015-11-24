@@ -12,9 +12,17 @@ var endQuery = " ?subject ?anyP ?anyOb }\n"
 exports.generateQuery = function(request){
 	
 	var command = request.command;
-	var value = request.value;
-	var target = request.target;
-	var room = request.room;
+	
+	//Action or ElseAction
+	if(command){
+		var value = request.value;
+		var target = request.target;
+		var room = request.room;
+	}else{ //Trigger
+		var target = request.subject;
+		var room = request.room;
+		command = "get";
+	}
 	
 	var splitted = target.split(":");
 	if(splitted.length == 1){
@@ -64,7 +72,7 @@ var queryFOIGenerated = function(target, room, value){
 	query += " ?subject foi:hasFOI dbpedia:" + target + ".\n";
 	if(room) query += " ?subject :isIn :" + room + ".\n";
 	if(value){
-		if(isNaN(value)) query += " ?subject foi:FOIGenerated dbpedia:" + value + ".\n";
+		if(isNaN(parseInt(value)) && value.toLowerCase() != "on" && value.toLowerCase() != "off") query += " ?subject foi:FOIGenerated dbpedia:" + value + ".\n";
 	} 
 	query += endQuery;
 	
@@ -80,7 +88,6 @@ exports.effectOnFOI = function(feature){
 	return query;
 	
 }
-
 
 
 var queryToObject = function(target, room){
