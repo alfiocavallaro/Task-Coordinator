@@ -14,11 +14,13 @@ var elaborateGoal = function(res,action,trigger,elseAction,repeat){
 		var isFired = evaluateTrigger(trigger);
 		if(isFired == true){
 			console.log("isFired: " + trigger + " " + action + " " + elseAction + " " + repeat);
-			if(repeat.toLowerCase() == "yes") saveInMongoDB(action,trigger,elseAction,repeat);
+			if(repeat.toLowerCase() == "yes") 
+				saveInMongoDB(action,trigger,elseAction,repeat);
 			requestToSmartObjects(action, res);
 		}else if(isFired == false){
 			if(elseAction){
-				if(repeat.toLowerCase() == "yes") saveInMongoDB(action,trigger,elseAction,repeat);
+				if(repeat.toLowerCase() == "yes") 
+					saveInMongoDB(action,trigger,elseAction,repeat);
 				requestToSmartObjects(elseAction, res);
 			}else{
 				saveInMongoDB(action,trigger,elseAction,repeat);
@@ -29,7 +31,8 @@ var elaborateGoal = function(res,action,trigger,elseAction,repeat){
 			return;
 		}
 	}else{
-		if(action.objects.length == 0 && res) res.send("La ricerca non ha restituito risultati");
+		if(action.objects.length == 0 && res) 
+			res.send("La ricerca non ha restituito risultati");
 		else requestToSmartObjects(action, res);
 	}
 };
@@ -417,20 +420,24 @@ function discoveryBlockQuery(query, callback){
 	req.end();
 }
 
-var interval = setInterval(periodicFunction, 10000);
+var period = 150000;
+
+var interval = setInterval(periodicFunction, period);
 
 function periodicFunction() {
 	Goal.find(function(err, goals){
-		if(goals.length > 0){
-			var trigger = JSON.parse(goals[0].trigger);
-			var action = JSON.parse(goals[0].action);
-			if(goals[0].elseAction) var elseAction = JSON.parse(goals[0].elseAction);
-			var repeat = goals[0].repeat;
+		
+		for(var i in goals){
+			var trigger = JSON.parse(goals[i].trigger);
+			var action = JSON.parse(goals[i].action);
+			if(goals[i].elseAction) 
+				var elseAction = JSON.parse(goals[i].elseAction);
+			var repeat = goals[i].repeat;
 
-			goals[0].remove();
+			goals[i].remove();
 			
 			elaborateGoal(undefined, action, trigger, elseAction, repeat);
-			
 		}
 	});
 }
+
