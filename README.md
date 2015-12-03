@@ -13,3 +13,4 @@ This module receive request from Understing Block. From this request a query in 
 It requires Node.js and Mongo DB installed. 
 Install the system with command npm install. 
 Start Discovery Block and Target Block.
+Run the system with command "node server".
