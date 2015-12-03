@@ -12,15 +12,18 @@ var endQuery = " ?subject ?anyP ?anyOb }\n"
 exports.generateQuery = function(request){
 	
 	var command = request.command;
+	var value;
+	var target;
+	var room;
 	
 	//Action or ElseAction
 	if(command){
-		var value = request.value;
-		var target = request.target;
-		var room = request.room;
+		if(request.value) value = request.value.toLowerCase();
+		if(request.target) target = request.target.toLowerCase();
+		if(request.room) room = request.room.toLowerCase();
 	}else{ //Trigger
-		var target = request.subject;
-		var room = request.room;
+		if(request.subject) target = request.subject.toLowerCase();
+		if(request.room) room = request.room.toLowerCase();
 		command = "get";
 	}
 	
@@ -93,10 +96,14 @@ exports.effectOnFOI = function(feature){
 var queryToObject = function(target, room){
 	var query = "";
 	
+	if(target == "all"){
+		return queryAll();
+	}
+	
 	//if target isGuid
 	if(validator.test(target.toString())){
 		
-		query = prefix + "{ ?subject :hasGuid '" + target + "'.\n";
+		query = prefix + "{ ?subject :hasGuid '" + target.toUpperCase() + "'.\n";
 		query += endQuery;
 
 	}else{ //Se non è un GUID, considero Target e Room

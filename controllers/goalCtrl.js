@@ -49,7 +49,7 @@ var writeRequestFile = function(stream){
 
 
 //Punto di Partenza! Ricevo un goal da gestire.
-//Salvo il file di richiesta JSON si disco ed elaboro il goal
+//Salvo il file di richiesta JSON su disco ed elaboro il goal
 exports.postGoals = function(req, res){
 	receive(req, function(body){
 		writeRequestFile(body);
